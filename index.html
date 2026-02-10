@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cozy — Sessions Dashboard</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a0f; color: #e0e0e8; min-height: 100vh; }
+  .header { padding: 16px 24px; border-bottom: 1px solid #1a1a2e; display: flex; align-items: center; justify-content: space-between; }
+  .header h1 { font-size: 17px; font-weight: 600; }
+  .header h1 span { color: #7c6ff7; }
+  .controls { display: flex; align-items: center; gap: 8px; }
+  .stats-bar { display: flex; gap: 16px; padding: 12px 24px; border-bottom: 1px solid #1a1a2e; background: #0d0d14; flex-wrap: wrap; }
+  .stat { text-align: center; min-width: 60px; }
+  .stat-value { font-size: 20px; font-weight: 700; color: #7c6ff7; }
+  .stat-label { font-size: 9px; color: #555; text-transform: uppercase; letter-spacing: 1px; }
+  .filter-bar { padding: 10px 24px; border-bottom: 1px solid #1a1a2e; display: flex; gap: 6px; flex-wrap: wrap; }
+  .fbtn { background: #12121c; border: 1px solid #1e1e30; color: #666; padding: 3px 10px; border-radius: 5px; cursor: pointer; font-size: 10px; }
+  .fbtn:hover, .fbtn.on { background: #1e1e30; color: #ddd; border-color: #7c6ff7; }
+  .refresh-btn { background: #1a1a2e; border: 1px solid #2a2a3e; color: #888; padding: 4px 10px; border-radius: 5px; cursor: pointer; font-size: 10px; }
+  .refresh-btn:hover { background: #2a2a3e; color: #fff; }
+  .ts { font-size: 9px; color: #333; }
+  .grid { padding: 16px 24px; display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 10px; }
+  .card { background: #12121c; border: 1px solid #1e1e30; border-radius: 10px; padding: 14px; transition: border-color 0.2s; }
+  .card:hover { border-color: #3a3a5e; }
+  .card.is-active { border-color: #4ade8044; }
+  .card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
+  .card-name { font-size: 13px; font-weight: 600; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .badge { font-size: 8px; padding: 2px 6px; border-radius: 3px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .bg { background: #1a2744; color: #5b9cf5; }
+  .bc { background: #2a2a14; color: #f5c55b; }
+  .bd { background: #1a4424; color: #5bf59c; }
+  .meta { display: flex; flex-wrap: wrap; gap: 8px; font-size: 10px; color: #444; margin-bottom: 6px; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-right: 4px; flex-shrink: 0; margin-top: 3px; }
+  .d-active { background: #4ade80; box-shadow: 0 0 8px #4ade8066; animation: pulse 2s infinite; }
+  .d-recent { background: #f59e0b; }
+  .d-idle { background: #222; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+  .activity { margin-top: 8px; border-top: 1px solid #1a1a2e; padding-top: 8px; }
+  .act-item { font-size: 11px; padding: 3px 0; display: flex; gap: 6px; align-items: flex-start; }
+  .act-action { color: #7c6ff7; font-weight: 500; white-space: nowrap; }
+  .act-detail { color: #555; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: 'SF Mono', Monaco, monospace; font-size: 10px; }
+  .act-time { color: #333; font-size: 9px; margin-left: auto; white-space: nowrap; }
+  .act-cost { color: #f59e0b; font-size: 9px; font-weight: 600; }
+  .empty { text-align: center; padding: 60px; color: #333; }
+  .live-dot { display: inline-block; width: 6px; height: 6px; background: #4ade80; border-radius: 50%; margin-left: 6px; animation: pulse 1.5s infinite; }
+  /* Detail panel */
+  .panel-overlay { position: fixed; inset: 0; background: #000a; z-index: 100; display: none; }
+  .panel-overlay.open { display: flex; justify-content: flex-end; }
+  .panel { width: min(700px, 90vw); height: 100vh; background: #0d0d14; border-left: 1px solid #1e1e30; overflow-y: auto; padding: 0; }
+  .panel-header { padding: 16px 20px; border-bottom: 1px solid #1e1e30; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; background: #0d0d14; z-index: 2; }
+  .panel-header h2 { font-size: 14px; font-weight: 600; }
+  .panel-close { background: none; border: 1px solid #2a2a3e; color: #888; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; }
+  .panel-close:hover { color: #fff; border-color: #555; }
+  .panel-meta { padding: 10px 20px; font-size: 10px; color: #444; border-bottom: 1px solid #1a1a2e; display: flex; gap: 12px; flex-wrap: wrap; }
+  .log { padding: 12px 20px; overflow-y: auto; max-height: calc(100vh - 100px); }
+  .log-entry { margin-bottom: 12px; border-left: 2px solid #1e1e30; padding-left: 12px; }
+  .log-entry.role-user { border-color: #5b9cf5; }
+  .log-entry.role-assistant { border-color: #7c6ff7; }
+  .log-entry.role-tool { border-color: #f59e0b; }
+  .log-ts { font-size: 9px; color: #333; margin-bottom: 2px; }
+  .log-role { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .log-role.r-user { color: #5b9cf5; }
+  .log-role.r-assistant { color: #7c6ff7; }
+  .log-tool-group { background: #12121c; border: 1px solid #1e1e30; border-radius: 6px; margin: 4px 0; overflow: hidden; }
+  .log-tool-call { padding: 8px 10px; }
+  .log-tool-name { font-size: 11px; color: #f59e0b; font-weight: 600; cursor: pointer; }
+  .log-tool-name:hover { text-decoration: underline; }
+  .log-tool-args { font-size: 10px; color: #555; font-family: 'SF Mono', Monaco, monospace; white-space: pre-wrap; word-break: break-all; max-height: 120px; overflow-y: auto; margin-top: 4px; }
+  .log-tool-result { background: #0a0a10; border-top: 1px solid #1a1a2e; padding: 8px 10px; }
+  .log-tool-result-text { font-size: 10px; color: #4a4a5a; font-family: 'SF Mono', Monaco, monospace; white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow-y: auto; }
+  .log-tool-result-label { font-size: 9px; color: #4ade80; font-weight: 600; margin-bottom: 3px; }
+  .log-tool-pending { background: #0a0a10; border-top: 1px dashed #1e1e30; padding: 6px 10px; font-size: 10px; color: #444; font-style: italic; }
+  .log-text { font-size: 12px; color: #bbb; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+  .log-thinking { font-size: 10px; color: #555; font-style: italic; background: #0a0a12; padding: 6px 8px; border-radius: 4px; margin: 4px 0; }
+  .log-cost { font-size: 9px; color: #f59e0b; margin-top: 2px; }
+  .log-model { font-size: 9px; color: #333; }
+  .log-loading { text-align: center; padding: 40px; color: #444; }
+  .log-spinner { display: flex; align-items: center; gap: 8px; padding: 12px 0; color: #7c6ff7; font-size: 12px; }
+  .log-spinner .dots { display: inline-flex; gap: 3px; }
+  .log-spinner .dots span { width: 5px; height: 5px; background: #7c6ff7; border-radius: 50%; animation: bounce 1.4s infinite ease-in-out; }
+  .log-spinner .dots span:nth-child(1) { animation-delay: 0s; }
+  .log-spinner .dots span:nth-child(2) { animation-delay: 0.16s; }
+  .log-spinner .dots span:nth-child(3) { animation-delay: 0.32s; }
+  @keyframes bounce { 0%,80%,100% { transform: scale(0); opacity: 0.3; } 40% { transform: scale(1); opacity: 1; } }
+  @media (max-width: 600px) { .grid { grid-template-columns: 1fr; padding: 10px; } .panel { width: 100vw; } }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>😮‍💨 <span>Cozy</span> Sessions <span class="live-dot"></span></h1>
+  <div class="controls">
+    <span class="ts" id="lastUp"></span>
+    <button class="refresh-btn" onclick="load()">↻</button>
+  </div>
+</div>
+<div class="stats-bar">
+  <div class="stat"><div class="stat-value" id="sT">-</div><div class="stat-label">Total</div></div>
+  <div class="stat"><div class="stat-value" id="sA">-</div><div class="stat-label">Active</div></div>
+  <div class="stat"><div class="stat-value" id="sR">-</div><div class="stat-label">1h</div></div>
+  <div class="stat"><div class="stat-value" id="sG">-</div><div class="stat-label">Groups</div></div>
+  <div class="stat"><div class="stat-value" id="sC">-</div><div class="stat-label">Crons</div></div>
+  <div class="stat"><div class="stat-value" id="sD">-</div><div class="stat-label">Direct</div></div>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:6px" id="authKeys"></div>
+</div>
+<div class="filter-bar">
+  <button class="fbtn on" onclick="filt('all',this)">All</button>
+  <button class="fbtn" onclick="filt('active',this)">🟢 Active</button>
+  <button class="fbtn" onclick="filt('recent',this)">🟡 Recent</button>
+  <button class="fbtn" onclick="filt('group',this)">💬 Groups</button>
+  <button class="fbtn" onclick="filt('cron',this)">⏰ Crons</button>
+  <button class="fbtn" onclick="filt('direct',this)">👤 Direct</button>
+  <button class="fbtn" onclick="filt('busy',this)">⚡ Busy</button>
+</div>
+<div class="grid" id="grid"></div>
+
+<div class="panel-overlay" id="panelOverlay" onclick="if(event.target===this)closePanel()">
+  <div class="panel">
+    <div class="panel-header">
+      <h2 id="panelTitle">Session Log</h2>
+      <button class="panel-close" onclick="closePanel()">✕ Close</button>
+    </div>
+    <div class="panel-meta" id="panelMeta"></div>
+    <div class="log" id="panelLog"><div class="log-loading">Loading...</div></div>
+  </div>
+</div>
+
+<script>
+let F='all', ALL=[];
+
+function ago(ts) {
+  if (!ts) return '—';
+  const t = typeof ts === 'string' ? new Date(ts).getTime() : ts;
+  const d = Date.now() - t;
+  if (d < 0) return 'now';
+  const s = d/1000|0;
+  if (s < 60) return s+'s';
+  const m = s/60|0;
+  if (m < 60) return m+'m';
+  const h = m/60|0;
+  if (h < 24) return h+'h';
+  return (h/24|0)+'d';
+}
+
+function typ(k) {
+  if (k.includes(':cron:')) return 'cron';
+  if (k.includes(':topic:') || k.includes('group:')) return 'group';
+  return 'direct';
+}
+
+function dot(u) {
+  const a = Date.now() - u;
+  if (a < 300000) return 'd-active';
+  if (a < 3600000) return 'd-recent';
+  return 'd-idle';
+}
+
+function name(k, s) {
+  if (s.label) return s.label;
+  if (s.subject) {
+    const t = k.match(/topic:(\d+)/)?.[1];
+    return s.subject + (t && t !== '1' ? ' #'+t : '');
+  }
+  if (s.displayName) return s.displayName.replace('telegram:','');
+  if (k.includes(':main:main')) return '💬 Main DM';
+  const c = k.match(/cron:(.{8})/)?.[1];
+  if (c) return 'Cron '+c+'…';
+  return k.split(':').slice(-2).join(':');
+}
+
+function badge(t) {
+  return `<span class="badge ${t==='group'?'bg':t==='cron'?'bc':'bd'}">${t}</span>`;
+}
+
+function actHTML(acts) {
+  if (!acts || !acts.length) return '';
+  return `<div class="activity">${acts.map(a => {
+    let detail = a.detail ? `<span class="act-detail">${esc(a.detail)}</span>` : '';
+    let time = a.ts ? `<span class="act-time">${ago(a.ts)}</span>` : '';
+    let cost = a.cost > 0 ? `<span class="act-cost">$${a.cost.toFixed(3)}</span>` : '';
+    return `<div class="act-item">
+      <span class="act-action">${a.action||'—'}</span>
+      ${detail}${cost}${time}
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function esc(s) { return s.replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function filt(f, el) {
+  F = f;
+  document.querySelectorAll('.fbtn').forEach(b=>b.classList.remove('on'));
+  el.classList.add('on');
+  draw();
+}
+
+function draw() {
+  const now = Date.now();
+  let list = ALL;
+  if (F==='active') list=ALL.filter(s=>now-s.updatedAt<300000);
+  else if (F==='recent') list=ALL.filter(s=>now-s.updatedAt<3600000);
+  else if (F==='group') list=ALL.filter(s=>typ(s.key)==='group');
+  else if (F==='cron') list=ALL.filter(s=>typ(s.key)==='cron');
+  else if (F==='direct') list=ALL.filter(s=>typ(s.key)==='direct'&&!s.key.includes(':cron:'));
+  else if (F==='busy') list=ALL.filter(s=>s.activity&&s.activity.length);
+
+  const g = document.getElementById('grid');
+  if (!list.length) { g.innerHTML='<div class="empty">No sessions</div>'; return; }
+  
+  g.innerHTML = list.map(s => {
+    const t = typ(s.key);
+    const isActive = Date.now() - s.updatedAt < 300000;
+    const idx = ALL.indexOf(s);
+    return `<div class="card${isActive?' is-active':''}" onclick="openSession('${esc(s.key)}',ALL[${idx}])" style="cursor:pointer">
+      <div class="card-top">
+        <div class="card-name"><span class="dot ${dot(s.updatedAt)}"></span>${name(s.key,s)}</div>
+        ${badge(t)}
+      </div>
+      <div class="meta">
+        <span>📡 ${s.channel||'—'}</span>
+        <span>⏱ ${ago(s.updatedAt)} ago</span>
+      </div>
+      ${actHTML(s.activity)}
+    </div>`;
+  }).join('');
+}
+
+async function load() {
+  try {
+    const r = await fetch('/data/sessions.json?t='+Date.now());
+    const d = await r.json();
+    ALL = (d.sessions||[]).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+    
+    const now = Date.now();
+    const a=ALL.filter(s=>now-s.updatedAt<300000).length;
+    const re=ALL.filter(s=>now-s.updatedAt<3600000).length;
+    const gr=ALL.filter(s=>typ(s.key)==='group').length;
+    const cr=ALL.filter(s=>typ(s.key)==='cron').length;
+    const di=ALL.filter(s=>typ(s.key)==='direct'&&!s.key.includes(':cron:')).length;
+    
+    document.getElementById('sT').textContent=ALL.length;
+    document.getElementById('sA').textContent=a;
+    document.getElementById('sR').textContent=re;
+    document.getElementById('sG').textContent=gr;
+    document.getElementById('sC').textContent=cr;
+    document.getElementById('sD').textContent=di;
+    document.getElementById('lastUp').textContent=new Date().toLocaleTimeString();
+    
+    // Show API keys
+    const auth = d.auth || {};
+    const order = auth.order || {};
+    const keysEl = document.getElementById('authKeys');
+    let keysHTML = '<span style="font-size:9px;color:#444">🔑 Keys:</span>';
+    for (const [provider, keys] of Object.entries(order)) {
+      for (let i = 0; i < keys.length; i++) {
+        const name = keys[i].replace(provider + ':', '');
+        keysHTML += `<span style="font-size:9px;padding:2px 6px;background:#1a1a2e;border-radius:3px;color:${i===0?'#4ade80':'#555'}">${i===0?'▶ ':''}${name}</span>`;
+      }
+    }
+    keysEl.innerHTML = keysHTML;
+    
+    draw();
+  } catch(e) { console.error(e); }
+}
+
+// Detail panel
+let panelSid = null;
+let panelInterval = null;
+let panelEntryCount = 0;
+
+async function openSession(key, s) {
+  const sid = s.sessionId;
+  if (!sid) return;
+  
+  panelSid = sid;
+  panelEntryCount = 0;
+  document.getElementById('panelOverlay').classList.add('open');
+  document.getElementById('panelTitle').textContent = name(key, s);
+  document.getElementById('panelMeta').innerHTML = `
+    <span>📡 ${s.channel||'—'}</span>
+    <span>🆔 ${sid.slice(0,8)}</span>
+    <span>⏱ ${ago(s.updatedAt)} ago</span>
+    <span>${typ(key).toUpperCase()}</span>
+    <span class="live-dot" style="margin-left:4px"></span>
+    <span style="color:#4ade80;font-size:9px">LIVE</span>
+  `;
+  document.getElementById('panelLog').innerHTML = '<div class="log-loading">Loading transcript...</div>';
+  
+  await loadTranscript(sid);
+  
+  // Start live polling every 3s
+  if (panelInterval) clearInterval(panelInterval);
+  panelInterval = setInterval(() => {
+    if (panelSid) loadTranscript(panelSid, true);
+  }, 3000);
+}
+
+async function loadTranscript(sid, isRefresh) {
+  try {
+    const r = await fetch('/data/transcript/' + sid + '?t=' + Date.now());
+    const d = await r.json();
+    if (d.error) {
+      if (!isRefresh) document.getElementById('panelLog').innerHTML = `<div class="log-loading">Error: ${d.error}</div>`;
+      return;
+    }
+    const entries = d.entries || [];
+    // Only re-render if new entries arrived
+    if (entries.length !== panelEntryCount) {
+      const wasAtBottom = isAtBottom();
+      panelEntryCount = entries.length;
+      renderLog(entries);
+      if (wasAtBottom || !isRefresh) scrollToBottom();
+    }
+  } catch(e) {
+    if (!isRefresh) document.getElementById('panelLog').innerHTML = `<div class="log-loading">Failed: ${e.message}</div>`;
+  }
+}
+
+function isAtBottom() {
+  const el = document.getElementById('panelLog');
+  return el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+}
+
+function scrollToBottom() {
+  const el = document.getElementById('panelLog');
+  el.scrollTop = el.scrollHeight;
+}
+
+function closePanel() {
+  document.getElementById('panelOverlay').classList.remove('open');
+  panelSid = null;
+  panelEntryCount = 0;
+  if (panelInterval) { clearInterval(panelInterval); panelInterval = null; }
+}
+
+function renderLog(entries) {
+  const log = document.getElementById('panelLog');
+  if (!entries.length) { log.innerHTML = '<div class="log-loading">No entries</div>'; return; }
+  
+  // Build a map of tool call ID → result
+  const resultMap = {};
+  for (const e of entries) {
+    for (const c of (e.content || [])) {
+      if (c.type === 'result' && c.id) resultMap[c.id] = c;
+    }
+  }
+  
+  // Track which results we've already rendered (linked to their call)
+  const renderedResults = new Set();
+  
+  log.innerHTML = entries.map(e => {
+    const role = e.role || 'system';
+    const roleClass = role === 'user' ? 'role-user' : role === 'assistant' ? 'role-assistant' : 'role-tool';
+    const roleLabelClass = role === 'user' ? 'r-user' : 'r-assistant';
+    
+    let contentHTML = '';
+    for (const c of (e.content || [])) {
+      if (c.type === 'tool') {
+        const argsStr = typeof c.args === 'object' ? JSON.stringify(c.args, null, 2) : String(c.args || '');
+        const result = resultMap[c.id];
+        let resultHTML = '';
+        if (result) {
+          renderedResults.add(c.id);
+          resultHTML = `<div class="log-tool-result">
+            <div class="log-tool-result-label">✅ Result</div>
+            <div class="log-tool-result-text">${esc(result.text || '(empty)')}</div>
+          </div>`;
+        } else {
+          resultHTML = `<div class="log-tool-pending">⏳ Waiting for result…</div>`;
+        }
+        contentHTML += `<div class="log-tool-group">
+          <div class="log-tool-call">
+            <div class="log-tool-name">🔧 ${esc(c.name)}</div>
+            <div class="log-tool-args">${esc(argsStr)}</div>
+          </div>
+          ${resultHTML}
+        </div>`;
+      } else if (c.type === 'result') {
+        // Skip if already rendered linked to its call
+        if (renderedResults.has(c.id)) continue;
+        contentHTML += `<div class="log-tool-group">
+          <div class="log-tool-result">
+            <div class="log-tool-result-label">✅ ${esc(c.name)}</div>
+            <div class="log-tool-result-text">${esc(c.text || '(empty)')}</div>
+          </div>
+        </div>`;
+      } else if (c.type === 'text') {
+        contentHTML += `<div class="log-text">${esc(c.text)}</div>`;
+      } else if (c.type === 'image') {
+        contentHTML += `<div style="margin:4px 0"><img src="${esc(c.url)}" style="max-width:100%;max-height:300px;border-radius:6px;border:1px solid #1e1e30" onerror="this.outerHTML='<span style=color:#555>🖼 Image: '+this.src+'</span>'"></div>`;
+      } else if (c.type === 'thinking') {
+        contentHTML += `<div class="log-thinking">🧠 ${esc(c.text)}</div>`;
+      }
+    }
+    
+    // Skip entries where all content was already rendered
+    if (!contentHTML.trim()) return '';
+    
+    let metaLine = '';
+    if (e.model) metaLine += `<span class="log-model">${e.model}</span> `;
+    if (e.cost > 0) metaLine += `<span class="log-cost">$${e.cost.toFixed(4)}</span> `;
+    if (e.tokens && (e.tokens.in || e.tokens.out)) metaLine += `<span class="log-model">${e.tokens.in}→${e.tokens.out} tok</span>`;
+    
+    return `<div class="log-entry ${roleClass}">
+      <div class="log-ts">${e.ts ? new Date(typeof e.ts === 'number' ? e.ts : e.ts).toLocaleString() : ''}</div>
+      <div class="log-role ${roleLabelClass}">${role}</div>
+      ${contentHTML}
+      ${metaLine ? `<div style="margin-top:4px">${metaLine}</div>` : ''}
+    </div>`;
+  }).join('');
+  
+  // Show loading spinner if last entry indicates work in progress
+  const last = entries[entries.length - 1];
+  if (last) {
+    const lc = last.content || [];
+    const li = lc[lc.length - 1];
+    const recent = last.ts && (Date.now() - new Date(typeof last.ts === 'number' ? last.ts : last.ts).getTime()) < 120000;
+    
+    if (recent && (li?.type === 'tool' || last.stop === 'toolUse')) {
+      log.innerHTML += `<div class="log-spinner"><div class="dots"><span></span><span></span><span></span></div> Running ${li?.name || 'tool'}…</div>`;
+    } else if (recent && li?.type === 'thinking') {
+      log.innerHTML += `<div class="log-spinner"><div class="dots"><span></span><span></span><span></span></div> Thinking…</div>`;
+    } else if (recent && last.role === 'user') {
+      log.innerHTML += `<div class="log-spinner"><div class="dots"><span></span><span></span><span></span></div> Generating response…</div>`;
+    }
+  }
+}
+
+// Keyboard shortcut
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closePanel(); });
+
+setInterval(load, 5000);
+load();
+</script>
+</body>
+</html>
